@@ -108,16 +108,16 @@ function check_ip_changes {
     # $(ip add show) 不包含 $(cat $IPv4_File) ,说明 IP 已发生变化.
     if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" != "1" ] && ! [[ $(ip add show) =~ $(cat $IPv4_File) ]]; then
         echo $(curl -s4m8 4.ipw.cn -k) > $IPv4_File
-        echo -e "\e[32mIPV4 地址已更新: $(cat $IPv4_File)\e[0m"
         New_IP=`cat $IPv4_File`
+        echo -e "\e[32mIPV4 地址已更新: $New_IP\e[0m"
         Record_Type="A"
         update_IP
     fi
 
     if [ -n "$IPv6" ] && [ "$IPv6_IsLAN" != "1" ] && ! [[ $(ip add show) =~ $(cat $IPv6_File) ]]; then
         echo $(curl -s6m8 6.ipw.cn -k) > $IPv6_File
-        echo -e "\e[32mIPV6 地址已更新: $(cat $IPv6_File)\e[0m"
         New_IP=`cat $IPv6_File`
+        echo -e "\e[32mIPV6 地址已更新: $New_IP\e[0m"
         Record_Type="AAAA"
         update_IP
     fi
