@@ -22,13 +22,22 @@ sleep 120
 
 # 获取路由器/光猫的公网 IP
 # 为防止大量请求 API , 使用两个文件保存旧的 IP 地址
-IPv4_File=$HOME/.IPv4.addr && echo $(curl -s4m8 4.ipw.cn -k) > $IPv4_File
-IPv6_File=$HOME/.IPv6.addr && echo $(curl -s6m8 6.ipw.cn -k) > $IPv6_File
+IPv4_File=$HOME/.IPv4.addr && echo `curl -s4m8 4.ipw.cn -k` > $IPv4_File
+IPv6_File=$HOME/.IPv6.addr && echo `curl -s6m8 6.ipw.cn -k` > $IPv6_File
 IPv4=`cat $IPv4_File`
 IPv6=`cat $IPv6_File`
 
+# copy & paste from https://www.cnblogs.com/osnosn/p/11813096.html
+function sys_ipv4 {
+    ip addr show|grep -A1 'inet [^f:]'|sed -nr 's#^ +inet ([0-9.]+)/[0-9]+ brd [0-9./]+ scope global .*#\1#p'
+}
+
+function sys_ipv6 {
+    ip addr show|grep -v deprecated|grep -A1 'inet6 [^f:]'|grep -v ^--|sed -nr ':a;N;s#^ +inet6 ([a-f0-9:]+)/.+? scope global .*? valid_lft ([0-9]+sec) .*#\2 \1#p;Ta'|sort -nr|head -n1|cut -d' ' -f2
+}
+
 # 判断路由器/光猫拨号获取的 IP 地址是公网 IP 还是私网 IP , 如果 IPv4/IPv6 某项为空,说明是单栈
-if [ -n "$IPv4" ] && ! [[ $(ip add show) =~ $IPv4 ]]; then
+if [ -n "$IPv4" ] && ! [[ `sys_ipv4` =~ $IPv4 ]]; then
     echo -e "\e[33m路由器/光猫 PPPoE 获取的 IPv4 地址为私网IP! \e[0m"
     IPv4_IsLAN="1"
 else
@@ -36,7 +45,7 @@ else
     IPv4_IsLAN="0"
 fi
 
-if [ -n "$IPv6" ] && ! [[ $(ip add show) =~ $IPv6 ]]; then
+if [ -n "$IPv6" ] && ! [[ `sys_ipv6` =~ $IPv6 ]]; then
     echo -e "\e[33m路由器/光猫 PPPoE 获取的 IPv6 地址为私网IP! \e[0m"
     IPv6_IsLAN="1"
 else
@@ -51,10 +60,18 @@ function update_IP {
     Record_Info=$(curl -s -X GET "$Record_Info_Api" -H "Authorization: Bearer $Cloudflare_API_Tokens" -H "Content-Type:application/json")
     Record_Info_Success=$(echo "$Record_Info" | jq -r ".success")
 
-    if [[ $Record_Info_Success != "true" ]]; then
-        echo -e "\e[31m连接Cloudflare失败，请检查 Cloudflare_Zone_ID 和 Cloudflare_API_Tokens 设置是否正确! \e[0m"
-        exit 1;
-    fi
+    # 尝试重连至成功为止
+    while [ 0 -eq 0 ]
+    do
+        if [[ $Record_Info_Success != "true" ]]; then
+            echo -e "\e[31m与 Cloudflare 连接失败， 重试中……\e[0m"
+            sleep 18
+            Record_Info_Success=$(echo "$Record_Info" | jq -r ".success")
+        else
+            echo -e "\e[31m与 Cloudflare 连接成功！\e[0m"
+            break;
+        fi
+    done
 
     Record_Id=$(echo "$Record_Info" | jq -r ".result[0].id")
     Record_Proxy=$(echo "$Record_Info" | jq -r ".result[0].proxied")
@@ -106,16 +123,16 @@ function check_ip_changes {
     # $IPv4/$IPv6 为空时说明路由器/光猫没有 IPv4/IPv6 地址,不予处理.
     # $IPv4_IsLAN/$IPv6_IsLAN 的值为 1 ,说明路由器/光猫获取的 IP 为内网 IP ,不予处理.
     # $(ip add show) 不包含 $(cat $IPv4_File) ,说明 IP 已发生变化.
-    if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" != "1" ] && ! [[ $(ip add show) =~ $(cat $IPv4_File) ]]; then
-        echo $(curl -s4m8 4.ipw.cn -k) > $IPv4_File
+    if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" != "1" ] && ! [[ `sys_ipv4` =~ `cat $IPv4_File` ]]; then
+        echo `curl -s4m8 4.ipw.cn -k` > $IPv4_File
         New_IP=`cat $IPv4_File`
         echo -e "\e[32mIPV4 地址已更新: $New_IP\e[0m"
         Record_Type="A"
         update_IP
     fi
 
-    if [ -n "$IPv6" ] && [ "$IPv6_IsLAN" != "1" ] && ! [[ $(ip add show) =~ $(cat $IPv6_File) ]]; then
-        echo $(curl -s6m8 6.ipw.cn -k) > $IPv6_File
+    if [ -n "$IPv6" ] && [ "$IPv6_IsLAN" != "1" ] && ! [[ `sys_ipv6` =~ `cat $IPv6_File` ]]; then
+        echo `curl -s6m8 6.ipw.cn -k` > $IPv6_File
         New_IP=`cat $IPv6_File`
         echo -e "\e[32mIPV6 地址已更新: $New_IP\e[0m"
         Record_Type="AAAA"
