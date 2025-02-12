@@ -1,0 +1,11 @@
+[Unit]
+Description=Cloudflare DDNS Update
+Wants=network-online.target
+After=network-online.target nss-lookup.target
+
+[Service]
+Type=exec
+ExecStart=/path/to/ddns_update.sh
+
+[Install]
+WantedBy=multi-user.target
