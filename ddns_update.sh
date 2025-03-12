@@ -128,7 +128,7 @@ function check_ip_changes {
     # $IPv4_IsLAN/$IPv6_IsLAN 的值为 1 ,说明路由器/光猫获取的 IP 为内网 IP ,不予处理.
     # $(ip add show) 不包含 $(cat $IPv4_File) ,说明 IP 已发生变化.
     if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" != "1" ] && ! [[ `sys_ipv4` =~ `cat $IPv4_File` ]]; then
-        echo `curl -s4m8 4.ipw.cn -k` > $IPv4_File
+        echo `curl -s4m8 $api_v4 -k` > $IPv4_File
         New_IP=`cat $IPv4_File`
         echo -e "\e[32mIPV4 地址已更新: $New_IP\e[0m"
         Record_Type="A"
@@ -136,7 +136,7 @@ function check_ip_changes {
     fi
 
     if [ -n "$IPv6" ] && [ "$IPv6_IsLAN" != "1" ] && ! [[ `sys_ipv6` =~ `cat $IPv6_File` ]]; then
-        echo `curl -s6m8 6.ipw.cn -k` > $IPv6_File
+        echo `curl -s6m8 $api_v6 -k` > $IPv6_File
         New_IP=`cat $IPv6_File`
         echo -e "\e[32mIPV6 地址已更新: $New_IP\e[0m"
         Record_Type="AAAA"
