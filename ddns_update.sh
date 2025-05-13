@@ -26,17 +26,17 @@ sleep 120
 
 # 获取路由器/光猫的公网 IP
 # 为防止大量请求 API , 使用两个文件保存旧的 IP 地址
-IPv4_File=$HOME/.IPv4.addr && echo `curl -s4m8 $api_v4 -k` > $IPv4_File
-IPv6_File=$HOME/.IPv6.addr && echo `curl -s6m8 $api_v6 -k` > $IPv6_File
+IPv4_File=$HOME/.IPv4.addr && `curl -s4m8 $api_v4 -k` > $IPv4_File
+IPv6_File=$HOME/.IPv6.addr && `curl -s6m8 $api_v6 -k` > $IPv6_File
 IPv4=`cat $IPv4_File`
 IPv6=`cat $IPv6_File`
 
 # copy & paste from https://www.cnblogs.com/osnosn/p/11813096.html
-function sys_ipv4 {
+sys_ipv4 {
     ip addr show|grep -A1 'inet [^f:]'|sed -nr 's#^ +inet ([0-9.]+)/[0-9]+ brd [0-9./]+ scope global .*#\1#p'
 }
 
-function sys_ipv6 {
+sys_ipv6 {
     ip addr show|grep -v deprecated|grep -v mngtmpaddr|grep -A1 'inet6 [^f:]'|grep -v ^--|sed -nr ':a;N;s#^ +inet6 ([a-f0-9:]+)/.+? scope global .*? valid_lft ([0-9]+sec) .*#\2 \1#p;Ta'|sort -nr|head -n1|cut -d' ' -f2
 }
 
@@ -57,7 +57,7 @@ else
     IPv6_IsLAN="0"
 fi
 
-function update_IP {
+update_IP {
     Record_Info_Api="https://api.cloudflare.com/client/v4/zones/${Cloudflare_Zone_ID}/dns_records?type=${Record_Type}&name=${Domain_Record}"
     Create_Record_Api="https://api.cloudflare.com/client/v4/zones/${Cloudflare_Zone_ID}/dns_records"
 
@@ -105,7 +105,7 @@ function update_IP {
     fi
 }
 
-function first_check {
+first_check {
 	# 第一次或再次执行脚本时，检查 IP 地址是否需要更新
     if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" != "1" ]; then
         New_IP=`cat $IPv4_File`
@@ -122,13 +122,13 @@ function first_check {
 
 first_check
 
-function check_ip_changes {
+check_ip_changes {
     # 判断 IP 地址是否发生变化.如果IP发生变化,将新的IP地址写入文件,同时将IP赋值给New_IP变量,调用 update_IP 函数更新 IP
     # $IPv4/$IPv6 为空时说明路由器/光猫没有 IPv4/IPv6 地址,不予处理.
     # $IPv4_IsLAN/$IPv6_IsLAN 的值为 1 ,说明路由器/光猫获取的 IP 为内网 IP ,不予处理.
     # $(ip add show) 不包含 $(cat $IPv4_File) ,说明 IP 已发生变化.
     if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" != "1" ] && ! [[ `sys_ipv4` =~ `cat $IPv4_File` ]]; then
-        echo `curl -s4m8 $api_v4 -k` > $IPv4_File
+        `curl -s4m8 $api_v4 -k` > $IPv4_File
         New_IP=`cat $IPv4_File`
         echo -e "\e[32mIPV4 地址已更新: $New_IP\e[0m"
         Record_Type="A"
@@ -136,7 +136,7 @@ function check_ip_changes {
     fi
 
     if [ -n "$IPv6" ] && [ "$IPv6_IsLAN" != "1" ] && ! [[ `sys_ipv6` =~ `cat $IPv6_File` ]]; then
-        echo `curl -s6m8 $api_v6 -k` > $IPv6_File
+        `curl -s6m8 $api_v6 -k` > $IPv6_File
         New_IP=`cat $IPv6_File`
         echo -e "\e[32mIPV6 地址已更新: $New_IP\e[0m"
         Record_Type="AAAA"
