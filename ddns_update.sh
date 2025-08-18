@@ -103,6 +103,7 @@ update_IP() {
         if [[ $Record_Info_Success != "true" ]]; then
             echo -e "\e[31m与 Cloudflare 连接失败， 重试中……\e[0m"
             sleep 18
+            Record_Info=$(curl -s -X GET "$Record_Info_Api" -H "Authorization: Bearer $Cloudflare_API_Tokens" -H "Content-Type:application/json")
             Record_Info_Success=$(echo "$Record_Info" | jq -r ".success")
         else
             echo -e "\e[31m与 Cloudflare 连接成功！\e[0m"
