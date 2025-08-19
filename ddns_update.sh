@@ -90,7 +90,7 @@ update_IP() {
     Record_Info_Api="https://api.cloudflare.com/client/v4/zones/${Cloudflare_Zone_ID}/dns_records?type=${Record_Type}&name=${Domain_Record}"
     Create_Record_Api="https://api.cloudflare.com/client/v4/zones/${Cloudflare_Zone_ID}/dns_records"
 
-    Record_Info=$(curl -s -X GET "$Record_Info_Api" -H "Authorization: Bearer $Cloudflare_API_Tokens" -H "Content-Type:application/json")
+    Record_Info=$(curl -s -m 10 -X GET "$Record_Info_Api" -H "Authorization: Bearer $Cloudflare_API_Tokens" -H "Content-Type:application/json")
     Record_Info_Success=$(echo "$Record_Info" | jq -r ".success")
 
     # 尝试重连10次，大于10次直接退出
@@ -104,7 +104,7 @@ update_IP() {
         if [[ $Record_Info_Success != "true" ]]; then
             echo -e "\e[31m与 Cloudflare 连接失败， 重试中……\e[0m"
             sleep 18
-            Record_Info=$(curl -s -X GET "$Record_Info_Api" -H "Authorization: Bearer $Cloudflare_API_Tokens" -H "Content-Type:application/json")
+            Record_Info=$(curl -s -m 10 -X GET "$Record_Info_Api" -H "Authorization: Bearer $Cloudflare_API_Tokens" -H "Content-Type:application/json")
             Record_Info_Success=$(echo "$Record_Info" | jq -r ".success")
         else
             echo -e "\e[31m与 Cloudflare 连接成功！\e[0m"
@@ -119,12 +119,12 @@ update_IP() {
 
     if [[ $Record_Id = "null" ]]; then
         # 没有记录时新增一个域名
-        Record_Info=$(curl -s -X POST "$Create_Record_Api" -H "Authorization: Bearer $Cloudflare_API_Tokens" -H "Content-Type:application/json" --data "{\"type\":\"$Record_Type\",\"name\":\"$Domain_Record\",\"content\":\"$New_IP\",\"proxied\":false}")
+        Record_Info=$(curl -s -m 10 -X POST "$Create_Record_Api" -H "Authorization: Bearer $Cloudflare_API_Tokens" -H "Content-Type:application/json" --data "{\"type\":\"$Record_Type\",\"name\":\"$Domain_Record\",\"content\":\"$New_IP\",\"proxied\":false}")
     elif [[ $Record_IP != $New_IP ]]; then
         # 有记录时更新域名的 IP 地址
         # 若域名的 IP 地址与当前机器的 IP 相同，则不更新 DNS 记录
         Update_Record_Api="https://api.cloudflare.com/client/v4/zones/${Cloudflare_Zone_ID}/dns_records/${Record_Id}";
-        Record_Info=$(curl -s -X PUT "$Update_Record_Api" -H "Authorization: Bearer $Cloudflare_API_Tokens" -H "Content-Type:application/json" --data "{\"type\":\"$Record_Type\",\"name\":\"$Domain_Record\",\"content\":\"$New_IP\",\"proxied\":$Record_Proxy}")
+        Record_Info=$(curl -s -m 10 -X PUT "$Update_Record_Api" -H "Authorization: Bearer $Cloudflare_API_Tokens" -H "Content-Type:application/json" --data "{\"type\":\"$Record_Type\",\"name\":\"$Domain_Record\",\"content\":\"$New_IP\",\"proxied\":$Record_Proxy}")
     else
         Record_Info_No="true"
     fi
