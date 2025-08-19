@@ -50,13 +50,14 @@ IPv6_File=$HOME/.IPv6.addr && IPv6=$(curl -s6m8 $api_v6 -k)
 echo $IPv4 > $IPv4_File
 echo $IPv6 > $IPv6_File
 
-# copy & paste from https://www.cnblogs.com/osnosn/p/11813096.html
+# 获取所有有效的 ipv4 地址
 sys_ipv4() {
-    ip -4 addr show|grep -A1 'inet [^f:]'|sed -nr 's#^ +inet ([0-9.]+)/[0-9]+ brd [0-9./]+ scope global .*#\1#p'
+    ip -4 -j addr show | jq -r '.[].addr_info[] | select(.scope == "global" and (.deprecated | not)) | .local'
 }
 
+# 获取有效时间最大的有效 ipv6 临时地址
 sys_ipv6() {
-    ip -6 addr show|grep -v deprecated|grep -v mngtmpaddr|grep -A1 'inet6 [^f:]'|grep -v ^--|sed -nr ':a;N;s#^ +inet6 ([a-f0-9:]+)/.+? scope global .*? valid_lft ([0-9]+sec) .*#\2 \1#p;Ta'|sort -nr|head -n1|cut -d' ' -f2
+    ip -6 -j addr show | jq -r '[.[].addr_info[] | select(.scope == "global" and .temporary and (.deprecated | not))] | max_by(.valid_life_time) | .local'
 }
 
 # 判断路由器/光猫拨号获取的 IP 地址是公网 IP 还是私网 IP , 如果 IPv4/IPv6 某项为空,说明是单栈
