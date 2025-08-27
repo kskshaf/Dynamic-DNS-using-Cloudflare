@@ -167,7 +167,13 @@ update_IP() {
     elif [[ $Record_Info_Success = "true" ]]; then
         echo -e "\e[32m域名IP更新成功! \e[0m"
     else
-        echo -e "\e[31m域名IP更新失败! \e[0m"
+        echo -e "\e[31m域名IP更新失败，重试中……\e[0m"
+        update_IP
+        ((retry_count++))
+        if ((retry_count > 10)); then
+            echo -e "\e[31m重试次数大于10次， 退出进程\e[0m"
+            exit 1
+        fi
     fi
 }
 
