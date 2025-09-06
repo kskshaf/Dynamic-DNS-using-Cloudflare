@@ -45,10 +45,8 @@ gateway_test
 
 # 获取路由器/光猫的公网 IP
 # 为防止大量请求 API , 使用两个文件保存旧的 IP 地址
-IPv4_File=$HOME/.IPv4.addr && IPv4=$(curl -s4m8 $api_v4 -k)
-IPv6_File=$HOME/.IPv6.addr && IPv6=$(curl -s6m8 $api_v6 -k)
-echo $IPv4 > $IPv4_File
-echo $IPv6 > $IPv6_File
+IPv4=$(curl -s4m8 $api_v4 -k)
+IPv6=$(curl -s6m8 $api_v6 -k)
 
 # 获取所有有效的 ipv4 地址
 sys_ipv4() {
@@ -61,30 +59,33 @@ sys_ipv6() {
 }
 
 # 判断路由器/光猫拨号获取的 IP 地址是公网 IP 还是私网 IP , 如果 IPv4/IPv6 某项为空,说明是单栈
-if [ -n "$IPv4" ]; then
-    if ! [[ `sys_ipv4` =~ $IPv4 ]]; then
-        echo -e "\e[33m路由器/光猫 PPPoE 获取的 IPv4 地址为私网IP! \e[0m"
-        IPv4_IsLAN="1"
+detect_lan_or_wan() {
+    if [ -n "$IPv4" ]; then
+        if ! [[ `sys_ipv4` =~ $IPv4 ]]; then
+            echo -e "\e[33m路由器/光猫 PPPoE 获取的 IPv4 地址为私网IP! \e[0m"
+            IPv4_IsLAN="1"
+        else
+            echo -e "\e[32m路由器/光猫 PPPoE 获取的 IPv4 地址为公网IP! \e[0m"
+            IPv4_IsLAN="0"
+        fi
     else
-        echo -e "\e[32m路由器/光猫 PPPoE 获取的 IPv4 地址为公网IP! \e[0m"
-        IPv4_IsLAN="0"
+        echo -e "\e[32m网络错误，无法获取到外网 IPv4 地址! \e[0m"
+        exit 1
     fi
-else
-    echo -e "\e[32m网络错误，无法获取到外网 IPv4 地址! \e[0m"
-    exit 1
-fi
 
-if [ -n "$IPv6" ]; then
-    if ! [[ `sys_ipv6` =~ $IPv6 ]]; then
-        echo -e "\e[33m路由器/光猫 PPPoE 获取的 IPv6 地址为私网IP! \e[0m"
-        IPv6_IsLAN="1"
+    if [ -n "$IPv6" ]; then
+        if [[ `sys_ipv6` != $IPv6 ]]; then
+            echo -e "\e[33m路由器/光猫 PPPoE 获取的 IPv6 地址为私网IP! \e[0m"
+            IPv6_IsLAN="1"
+        else
+            echo -e "\e[32m路由器/光猫 PPPoE 获取的 IPv6 地址为公网IP! \e[0m"
+            IPv6_IsLAN="0"
+        fi
     else
-        echo -e "\e[32m路由器/光猫 PPPoE 获取的 IPv6 地址为公网IP! \e[0m"
-        IPv6_IsLAN="0"
+        echo -e "\e[32m无法获取到 IPv6 地址! \e[0m"
+        IPv6_IsLAN="-1"
     fi
-else
-    echo -e "\e[32m无法获取到 IPv6 地址! \e[0m"
-fi
+}
 
 # 检查与 CF 的连接
 check_CF() {
@@ -178,15 +179,15 @@ update_IP() {
 }
 
 first_check() {
-	# 第一次或再次执行脚本时，检查 IP 地址是否需要更新
-    if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" != "1" ]; then
-        New_IP=`cat $IPv4_File`
+    # 第一次或再次执行脚本时，检查 IP 地址是否需要更新
+    if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" == "0" ]; then
+        New_IP=$IPv4
         Record_Type="A"
         update_IP
     fi
 
-    if [ -n "$IPv6" ] && [ "$IPv6_IsLAN" != "1" ]; then
-        New_IP=`cat $IPv6_File`
+    if [ -n "$IPv6" ] && [ "$IPv6_IsLAN" == "0" ]; then
+        New_IP=$IPv6
         Record_Type="AAAA"
         update_IP
     fi
@@ -196,30 +197,32 @@ check_ip_changes() {
     # 判断 IP 地址是否发生变化.如果IP发生变化,将新的IP地址写入文件,同时将IP赋值给New_IP变量,调用 update_IP 函数更新 IP
     # $IPv4/$IPv6 为空时说明路由器/光猫没有 IPv4/IPv6 地址,不予处理.
     # $IPv4_IsLAN/$IPv6_IsLAN 的值为 1 ,说明路由器/光猫获取的 IP 为内网 IP ,不予处理.
-    # $(ip add show) 不包含 $(cat $IPv4_File) ,说明 IP 已发生变化.
     gateway_test
 
-    if [[ -n `sys_ipv6` ]] && ! [ -n "$IPv6" ]; then
+    if [[ -n `sys_ipv6` ]] && [ "$IPv6_IsLAN" != "0" ]; then
         IPv6=$(curl -s6m8 $api_v6 -k)
-        echo -e "\e[32m已重新获取到 IPV6 地址：$IPv6\e[0m"
+        echo -e "\e[32m尝试重新获取 IPV6 地址中：$IPv6\e[0m"
+        detect_lan_or_wan
     fi
 
-    if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" != "1" ] && ! [[ `sys_ipv4` =~ `cat $IPv4_File` ]]; then
-        New_IP=$(curl -s4m8 $api_v4 -k) && echo $New_IP > $IPv4_File
+    if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" == "0" ] && ! [[ `sys_ipv4` =~ $IPv4 ]]; then
+        New_IP=$(curl -s4m8 $api_v4 -k)
+        IPv4=$New_IP
         echo -e "\e[32mIPV4 地址已更新: $New_IP\e[0m"
         Record_Type="A"
         update_IP
     fi
 
-    if [ -n "$IPv6" ] && [ "$IPv6_IsLAN" != "1" ] && ! [[ `sys_ipv6` =~ `cat $IPv6_File` ]]; then
-        New_IP=$(curl -s6m8 $api_v6 -k) && echo $New_IP > $IPv6_File
+    if [ -n "$IPv6" ] && [ "$IPv6_IsLAN" == "0" ] && [[ `sys_ipv6` != $IPv6 ]]; then
+        New_IP=$(curl -s6m8 $api_v6 -k)
+        IPv6=$New_IP
         echo -e "\e[32mIPV6 地址已更新: $New_IP\e[0m"
         Record_Type="AAAA"
         update_IP
     fi
 }
 
-
+detect_lan_or_wan
 first_check
 
 # 每 3 分钟调用一次 check_ip_changes 函数,检查 IP 是否发生变化
