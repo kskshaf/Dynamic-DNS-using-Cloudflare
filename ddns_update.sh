@@ -165,8 +165,10 @@ update_IP() {
 
     if [[ $Record_Info_No = "true" ]]; then
         echo -e "\e[32m域名IP无需更新 \e[0m"
+        retry_count=0
     elif [[ $Record_Info_Success = "true" ]]; then
         echo -e "\e[32m域名IP更新成功! \e[0m"
+        retry_count=0
     else
         echo -e "\e[31m域名IP更新失败，重试中……\e[0m"
         update_IP
