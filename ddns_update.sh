@@ -249,6 +249,11 @@ check_ip_changes() {
             update_IP
         else
             echo -e "\e[32m获取IPV6异常\e[0m"
+            ((retry_count++))
+            if ((retry_count > $retry_limit)); then
+                echo -e "\e[31m重试次数大于$retry_limit次，退出进程\e[0m"
+                exit 1
+            fi
         fi
 
     fi
