@@ -25,6 +25,7 @@ gateway='192.168.0.1'
 
 # cloudflare 重连计数
 retry_count=0
+retry_limit=10
 
 # 网关测试
 gateway_test() {
@@ -56,6 +57,12 @@ sys_ipv4() {
 # 获取有效时间最大的有效 ipv6 临时地址
 sys_ipv6() {
     ip -6 -j addr show | jq -r '[.[].addr_info[] | select(.scope == "global" and .temporary and (.deprecated | not))] | max_by(.valid_life_time) | .local'
+}
+
+# 获取有效时间最大的有效 ipv6 地址
+# 无法获取临时地址时使用
+sys_ipv6_able() {
+    ip -6 -j addr show | jq -r '[.[].addr_info[] | select(.scope == "global" and (.deprecated | not))] | max_by(.valid_life_time) | .local'
 }
 
 # 判断路由器/光猫拨号获取的 IP 地址是公网 IP 还是私网 IP , 如果 IPv4/IPv6 某项为空,说明是单栈
@@ -129,13 +136,13 @@ update_IP() {
     # 尝试重连10次，大于10次直接退出
     while true; do
         ((retry_count++))
-        if ((retry_count > 10)); then
-            echo -e "\e[31m重试次数大于10次， 退出进程\e[0m"
+        if ((retry_count > $retry_limit)); then
+            echo -e "\e[31m重试次数大于$retry_limit次，退出进程\e[0m"
             exit 1
         fi
 
         if [[ $Record_Info_Success != "true" ]]; then
-            echo -e "\e[31m与 Cloudflare 连接失败， 重试中……\e[0m"
+            echo -e "\e[31m与 Cloudflare 连接失败，重试中……\e[0m"
             sleep 18
             Record_Info=$(check_CF)
             Record_Info_Success=$(echo "$Record_Info" | jq -r ".success")
@@ -173,8 +180,8 @@ update_IP() {
         echo -e "\e[31m域名IP更新失败，重试中……\e[0m"
         update_IP
         ((retry_count++))
-        if ((retry_count > 10)); then
-            echo -e "\e[31m重试次数大于10次， 退出进程\e[0m"
+        if ((retry_count > $retry_limit)); then
+            echo -e "\e[31m重试次数大于$retry_limit次，退出进程\e[0m"
             exit 1
         fi
     fi
@@ -201,7 +208,7 @@ check_ip_changes() {
     # $IPv4_IsLAN/$IPv6_IsLAN 的值为 1 ,说明路由器/光猫获取的 IP 为内网 IP ,不予处理.
     gateway_test
 
-    if [[ -n `sys_ipv6` ]] && [ "$IPv6_IsLAN" != "0" ]; then
+    if [[ $(sys_ipv6) != "null" ]] && [ "$IPv6_IsLAN" != "0" ]; then
         IPv6=$(curl -s6m8 $api_v6 -k)
         echo -e "\e[32m尝试重新获取 IPV6 地址中：$IPv6\e[0m"
         detect_lan_or_wan
@@ -215,12 +222,35 @@ check_ip_changes() {
         update_IP
     fi
 
+
     if [ -n "$IPv6" ] && [ "$IPv6_IsLAN" == "0" ] && [[ `sys_ipv6` != $IPv6 ]]; then
         New_IP=$(curl -s6m8 $api_v6 -k)
-        IPv6=$New_IP
-        echo -e "\e[32mIPV6 地址已更新: $New_IP\e[0m"
+        Sys_IPv6=$(sys_ipv6)
         Record_Type="AAAA"
-        update_IP
+
+        # 避免使用API获取IPV6地址错误时无法更新域名IP
+        if [[ $Sys_IPv6 != "null" ]]; then
+
+            if [[ "$New_IP" == "$Sys_IPv6" ]]; then
+                IPv6=$New_IP
+            else
+                IPv6=$Sys_IPv6
+                New_IP=$Sys_IPv6
+                echo -e "\e[32m使用API获取IPV6异常，以系统获取的IPV6为基准\e[0m"
+            fi
+
+            echo -e "\e[32mIPV6 地址已更新: $New_IP\e[0m"
+            update_IP
+
+        elif [[ $(sys_ipv6_able) != "null" ]] && [[ $(sys_ipv6) == "null" ]]; then
+            echo -e "\e[32m获取IPV6临时地址异常，使用系统可用的IPV6：$(sys_ipv6_able)\e[0m"
+            IPv6=$(sys_ipv6_able)
+            New_IP=$IPv6
+            update_IP
+        else
+            echo -e "\e[32m获取IPV6异常\e[0m"
+        fi
+
     fi
 }
 
