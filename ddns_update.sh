@@ -47,7 +47,7 @@ gateway_test() {
 }
 
 # 为了防止网络尚未完全启动而造成获取 IP 失败，延迟 $start_delay 秒执行
-echo "延迟$start_delay秒执行"
+echo "延迟${start_delay}秒执行"
 sleep $start_delay
 
 # 等待网关ping通
@@ -188,11 +188,11 @@ update_IP() {
     while [[ $Record_Info_Success != "true" ]]; do
         ((cf_retry++))
         if ((cf_retry > retry_limit)); then
-            echo -e "\e[31m与 CloudFlare 连接重试次数大于$retry_limit次，退出进程\e[0m"
+            echo -e "\e[31m与 CloudFlare 连接重试次数大于${retry_limit}次，退出进程\e[0m"
             exit 1
         fi
 
-        echo -e "\e[31m与 Cloudflare 连接失败，重试中……($cf_retry)\e[0m"
+        echo -e "\e[31m与 Cloudflare 连接失败，重试中……(${cf_retry})\e[0m"
         sleep 18
         Record_Info=$(check_CF)
         Record_Info_Success=$(echo "$Record_Info" | jq -r ".success")
@@ -226,10 +226,10 @@ update_IP() {
         retry_count=0
         ip_check_delay=$tmp_ip_check_delay
     else
-        echo -e "\e[31m域名IP更新失败，重试中……($cf_retry)\e[0m"
+        echo -e "\e[31m域名IP更新失败，重试中……(${retry_count})\e[0m"
         ((retry_count++))
         if ((retry_count > retry_limit)); then
-            echo -e "\e[31m重试次数大于$retry_limit次，退出进程\e[0m"
+            echo -e "\e[31m重试次数大于${retry_limit}次，退出进程\e[0m"
             exit 1
         fi
         # 当域名IP更新失败时，缩短check_ip_changes的循环执行时间到10秒
@@ -318,7 +318,7 @@ check_ip_changes() {
             echo -e "\e[32m获取IPV6异常\e[0m"
             ((retry_count++))
             if ((retry_count > retry_limit)); then
-                echo -e "\e[31m重试次数大于$retry_limit次，退出进程\e[0m"
+                echo -e "\e[31m重试次数大于${retry_limit}次，退出进程\e[0m"
                 exit 1
             fi
         fi
