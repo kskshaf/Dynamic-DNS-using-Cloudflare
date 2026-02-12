@@ -32,7 +32,8 @@ else
 fi
 
 retry_count=0
-tmp_ip_check_delay=$ip_check_delay
+readonly tmp_ip_check_delay=$ip_check_delay
+readonly tmp_ipv6_temporary=$ipv6_temporary
 
 # 使用ping测试网关
 gateway_test() {
@@ -59,6 +60,7 @@ until gateway_test; do
     echo "等待网关就绪……"
     sleep 30
 done
+retry_count=0
 
 # 获取路由器/光猫的公网 IP
 curl_ip() {
@@ -224,7 +226,7 @@ update_IP() {
         retry_count=0
         ip_check_delay=$tmp_ip_check_delay
     else
-        echo -e "\e[31m域名IP更新失败，重试中……\e[0m"
+        echo -e "\e[31m域名IP更新失败，重试中……($cf_retry)\e[0m"
         ((retry_count++))
         if ((retry_count > retry_limit)); then
             echo -e "\e[31m重试次数大于$retry_limit次，退出进程\e[0m"
@@ -263,6 +265,17 @@ check_ip_changes() {
         detect_lan_or_wan
     fi
 
+    # 重新判断是否有临时地址
+    if ($tmp_ipv6_temporary) && (! $ipv6_temporary); then
+        ipv6_temporary=true   # 启用ipv6_temporary来测试是否有临时地址
+        if [[ "$(sys_ipv6)" != "null" ]]; then
+            echo "已成功获取IPv6临时地址"
+        else
+            ipv6_temporary=false
+        fi
+    fi
+
+
     if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" == "0" ] && [[ "$(sys_ipv4)" != *"$IPv4"* ]]; then
         curl_ip 4
         if [ -n "$IPv4"]; then
@@ -272,7 +285,7 @@ check_ip_changes() {
             update_IP
         else
             echo "获取公网 IPv4 地址失败"
-            return 1
+            # return 1
         fi
     fi
 
@@ -300,6 +313,7 @@ check_ip_changes() {
             IPv6=$(sys_ipv6_able)
             New_IP=$IPv6
             update_IP
+            ipv6_temporary=false   # 停止使用IPv6临时地址
         else
             echo -e "\e[32m获取IPV6异常\e[0m"
             ((retry_count++))
