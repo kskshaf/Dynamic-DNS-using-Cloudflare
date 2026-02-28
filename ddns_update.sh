@@ -101,6 +101,8 @@ check_config_and_commands
 
 # --- 变量初始化 ---
 retry_count=0
+ipv4_update_retry="false"
+ipv6_update_retry="false"
 readonly tmp_ip_check_delay=$ip_check_delay
 readonly tmp_ipv6_temporary=$ipv6_temporary
 
@@ -295,6 +297,18 @@ data = "{\"type\":\"$Record_Type\",\"name\":\"$Domain_Record\",\"content\":\"$Ne
 EOF
 }
 
+# 设置是否需要尝试更新IP
+# 输入参数为 true / false
+update_Retry_Set() {
+    if [[ "$Record_Type" == "A" ]]; then
+        ipv4_update_retry="$1"
+    fi
+
+    if [[ "$Record_Type" == "AAAA" ]]; then
+        ipv6_update_retry="$1"
+    fi
+}
+
 # 核心更新逻辑
 update_IP() {
     Create_Record_Api="https://api.cloudflare.com/client/v4/zones/${Cloudflare_Zone_ID}/dns_records"
@@ -345,6 +359,7 @@ update_IP() {
             msg success "域名IP更新成功!"
             retry_count=0
             ip_check_delay=$tmp_ip_check_delay
+            update_Retry_Set "false"
         else
             msg warn "域名IP更新失败，重试中……(${retry_count})"
             ((retry_count++))
@@ -354,9 +369,26 @@ update_IP() {
             fi
             # 当域名IP更新失败时，缩短check_ip_changes的循环执行时间到10秒，快速重试
             ip_check_delay=10
+            update_Retry_Set "true"
         fi
     else
         ip_check_delay=$tmp_ip_check_delay
+        update_Retry_Set "false"
+    fi
+}
+
+# 尝试重新更新
+update_Retry() {
+    if [[ "$ipv4_update_retry" == "true" ]]; then
+        New_IP="$IPv4"
+        Record_Type="A"
+        update_IP
+    fi
+
+    if [[ "$ipv6_update_retry" == "true" ]]; then
+        New_IP="$IPv6"
+        Record_Type="AAAA"
+        update_IP
     fi
 }
 
@@ -382,6 +414,20 @@ check_ip_changes() {
     # 当开启 ipv6_detect_retry 时，尝试重新测试是否有公网 IPv6
     gateway_test || return
 
+    # 检查 IPv4 变化
+    if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" == "0" ] && [[ "$(sys_ipv4)" != *"$IPv4"* ]]; then
+        curl_ip 4
+        if [ -n "$IPv4" ]; then
+            New_IP="$IPv4"
+            msg info "IPV4 地址已更新: $New_IP"
+            Record_Type="A"
+            update_IP
+        else
+            msg warn "获取公网 IPv4 地址失败"
+            # return 1
+        fi
+    fi
+
     # 尝试重新获取公网 IPv6
     if [[ "$ipv6_detect_retry" == "true" ]] && [[ "$(sys_ipv6_able)" != "null" ]] && [ "$IPv6_IsLAN" != "0" ]; then
         curl_ip 6
@@ -398,20 +444,6 @@ check_ip_changes() {
             msg success "IPv6临时地址已恢复，使用IPv6临时地址更新IP"
         else
             ipv6_temporary="false"
-        fi
-    fi
-
-    # 检查 IPv4 变化
-    if [ -n "$IPv4" ] && [ "$IPv4_IsLAN" == "0" ] && [[ "$(sys_ipv4)" != *"$IPv4"* ]]; then
-        curl_ip 4
-        if [ -n "$IPv4" ]; then
-            New_IP="$IPv4"
-            msg info "IPV4 地址已更新: $New_IP"
-            Record_Type="A"
-            update_IP
-        else
-            msg warn "获取公网 IPv4 地址失败"
-            # return 1
         fi
     fi
 
@@ -465,6 +497,7 @@ msg info "初始化完成，进入守护模式 (检查周期: ${ip_check_delay}s
 
 # 每 $ip_check_delay 秒调用一次 check_ip_changes 函数，检查 IP 是否发生变化
 while true; do
+    update_Retry
     check_ip_changes
     sleep $ip_check_delay
 done
