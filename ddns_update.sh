@@ -433,6 +433,9 @@ check_ip_changes() {
         curl_ip 6
         msg info "尝试重新获取 IPV6 地址中：$IPv6"
         detect_lan_or_wan
+
+        # 重新获取成功后更新 ipv6
+        ipv6_update_retry="true"
     fi
 
     # 重新判断是否有 IPv6 临时地址
